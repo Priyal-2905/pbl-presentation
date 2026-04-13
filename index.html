@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,245 +8,964 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800;900&display=swap"
+        rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        body { background-color: #020617; color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; scroll-behavior: smooth; }
-        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .gradient-text { background: linear-gradient(90deg, #60a5fa, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        
-        #timerContainer { background: #ffffff; color: #020617; box-shadow: 0 10px 40px rgba(0,0,0,0.8); border: 3px solid #3b82f6; z-index: 1000; }
-        @keyframes flicker { 0%, 100% { background-color: #ffffff; } 50% { background-color: #fca5a5; } }
-        .timer-warning { animation: flicker 1s infinite; border: 3px solid #ef4444 !important; color: #b91c1c !important; }
-        .timer-stop { background-color: #991b1b !important; color: #ffffff !important; border: 3px solid #f87171 !important; animation: none; }
+        :root {
+            --bg: #030c12;
+            --surface: rgba(0, 220, 180, 0.04);
+            --surface-hover: rgba(0, 220, 180, 0.07);
+            --border: rgba(0, 220, 180, 0.15);
+            --border-strong: rgba(0, 220, 180, 0.3);
+            --teal: #00e5c8;
+            --teal-dim: rgba(0, 229, 200, 0.18);
+            --amber: #f59e0b;
+            --white: #eef8f6;
+            --muted: #7ab8b0;
+            --muted-dim: #4a7a74;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--white);
+            font-family: 'Inter', 'Syne', sans-serif;
+            font-size: 15px;
+            line-height: 1.7;
+            scroll-behavior: smooth;
+            overflow-x: hidden;
+        }
+
+        /* ── Live EEG background canvas ── */
+        #eeg-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            opacity: 0.18;
+            pointer-events: none;
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── Scanlines overlay (very subtle) ── */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            background: repeating-linear-gradient(0deg,
+                    transparent,
+                    transparent 3px,
+                    rgba(0, 0, 0, 0.025) 3px,
+                    rgba(0, 0, 0, 0.025) 4px);
+        }
+
+        /* ── Glass panels ── */
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 10px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(0,229,200,0.08) inset;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .panel:hover {
+            border-color: var(--border-strong);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 20px rgba(0,229,200,0.06);
+        }
+
+        /* ── Typography ── */
+        .mono {
+            font-family: 'Space Mono', monospace;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Syne', sans-serif;
+            letter-spacing: -0.02em;
+        }
+
+        p {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .label {
+            font-family: 'Space Mono', monospace;
+            font-size: 10.5px;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--teal);
+            opacity: 0.9;
+        }
+
+        /* ── EEG wave dividers ── */
+        .wave-divider {
+            width: 100%;
+            height: 60px;
+            position: relative;
+            overflow: hidden;
+            margin: 0;
+        }
+
+        .wave-divider canvas {
+            position: absolute;
+            inset: 0;
+        }
+
+        /* ── Glowing teal accent lines ── */
+        .accent-line {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--teal), transparent);
+            opacity: 0.5;
+        }
+
+        /* ── Stat blocks ── */
+        .stat-block {
+            border-left: 3px solid var(--teal);
+            padding: 18px 24px;
+            background: rgba(0, 229, 200, 0.05);
+            border-radius: 0 8px 8px 0;
+            transition: background 0.2s;
+        }
+
+        .stat-block:hover {
+            background: rgba(0, 229, 200, 0.09);
+        }
+
+        .stat-label-text {
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--muted);
+            letter-spacing: 0.05em;
+        }
+
+        .stat-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 2.6rem;
+            font-weight: 700;
+            color: var(--teal);
+            line-height: 1.1;
+        }
+
+        .stat-value.amber {
+            color: var(--amber);
+        }
+
+        /* ── Nav ── */
+        nav {
+            position: fixed;
+            width: 100%;
+            z-index: 50;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            background: rgba(3, 12, 18, 0.88);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-link {
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            text-decoration: none;
+            transition: color 0.2s;
+            padding: 4px 2px;
+            position: relative;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            left: 0; right: 0; bottom: -2px;
+            height: 1px;
+            background: var(--teal);
+            transform: scaleX(0);
+            transition: transform 0.25s;
+        }
+
+        .nav-link:hover {
+            color: var(--teal);
+        }
+
+        .nav-link:hover::after {
+            transform: scaleX(1);
+        }
+
+        /* ── Hero channel display ── */
+        .channel-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(0, 220, 180, 0.06);
+        }
+
+        .channel-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            color: var(--muted);
+            width: 50px;
+            flex-shrink: 0;
+        }
+
+        .channel-wave {
+            flex: 1;
+            height: 28px;
+        }
+
+        /* ── Timer ── */
+        #timerContainer {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            z-index: 100;
+            background: rgba(3, 10, 15, 0.95);
+            border: 1px solid var(--teal);
+            border-radius: 4px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 0 24px rgba(0, 220, 180, 0.2), inset 0 0 40px rgba(0, 220, 180, 0.03);
+        }
+
+        #timerContainer.timer-warning {
+            border-color: var(--amber);
+            box-shadow: 0 0 24px rgba(245, 158, 11, 0.3);
+            animation: pulse-amber 1s infinite;
+        }
+
+        #timerContainer.timer-stop {
+            border-color: #ef4444;
+            box-shadow: 0 0 24px rgba(239, 68, 68, 0.4);
+            animation: none;
+        }
+
+        @keyframes pulse-amber {
+
+            0%,
+            100% {
+                box-shadow: 0 0 24px rgba(245, 158, 11, 0.3);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(245, 158, 11, 0.6);
+            }
+        }
+
+        #displayTime {
+            font-family: 'Space Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--teal);
+            letter-spacing: 0.05em;
+        }
+
+        #timerContainer.timer-warning #displayTime {
+            color: var(--amber);
+        }
+
+        #timerContainer.timer-stop #displayTime {
+            color: #ef4444;
+        }
+
+        /* ── Blinking cursor ── */
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0
+            }
+        }
+
+        .cursor {
+            animation: blink 1s infinite;
+        }
+
+        /* ── Section spacing ── */
+        main {
+            max-width: 1140px;
+            margin: 0 auto;
+            padding: 0 40px 120px;
+        }
+
+        section {
+            padding-top: 130px;
+        }
+
+        /* ── Gradient text ── */
+        .teal-text {
+            color: var(--teal);
+        }
+
+        /* ── Card grid ── */
+        .card {
+            padding: 28px 32px;
+            border-radius: 10px;
+        }
+
+        /* ── Pulse dot ── */
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--teal);
+            box-shadow: 0 0 0 0 rgba(0, 220, 180, 0.6);
+            animation: pulse-ring 2s infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                box-shadow: 0 0 0 0 rgba(0, 220, 180, 0.5);
+            }
+
+            70% {
+                box-shadow: 0 0 0 8px rgba(0, 220, 180, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(0, 220, 180, 0);
+            }
+        }
+
+        /* ── Architecture flow ── */
+        .arch-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .arch-step::after {
+            content: '→';
+            position: absolute;
+            right: -14px;
+            top: 30%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            font-family: 'Space Mono', monospace;
+            font-size: 14px;
+        }
+
+        .arch-step:last-child::after {
+            display: none;
+        }
+
+        .arch-box {
+            border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            padding: 14px 10px;
+            font-family: 'Space Mono', monospace;
+            font-size: 10.5px;
+            line-height: 1.6;
+            color: var(--teal);
+            background: rgba(0, 229, 200, 0.05);
+            margin-bottom: 8px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .arch-box:hover {
+            background: rgba(0, 229, 200, 0.1);
+            border-color: var(--teal);
+        }
+
+        /* ── Footer ── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 48px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        /* ── Team cards ── */
+        .team-card {
+            border-top: 2px solid var(--teal);
+            padding: 32px 44px;
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .team-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.35), 0 0 20px rgba(0,229,200,0.08);
+        }
+
+        /* scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--muted);
+            border-radius: 2px;
+        }
     </style>
 </head>
-<body onload="startTimer()">
- 
-    <div id="timerContainer" class="fixed bottom-10 right-10 px-8 py-4 rounded-3xl flex items-center gap-4 transition-all">
-        <i class="fas fa-hourglass-start text-blue-600 text-2xl" id="timerIcon"></i>
-        <span id="displayTime" class="text-4xl font-black font-mono tracking-tighter">00:00</span>
+
+<body onload="init()">
+
+    <canvas id="eeg-bg"></canvas>
+
+    <div id="timerContainer">
+        <span class="pulse-dot" id="timerDot"></span>
+        <span id="displayTime" class="mono">00:00</span>
     </div>
- 
-    <nav class="fixed w-full z-50 glass border-b border-slate-800/50 px-8 py-4 flex justify-between items-center">
-        <div class="flex items-center gap-4">
-            <div class="bg-white p-1 rounded flex items-center justify-center shadow-md" style="height: 48px; width: 48px;">
-                <img src="mujlogo.png" alt="MUJ" class="h-full w-auto object-contain" onerror="this.src='https://via.placeholder.com/50?text=MUJ'">
+
+    <nav class="content">
+        <div style="display:flex;align-items:center;gap:16px;">
+            <div style="border:1px solid var(--border);padding:6px;border-radius:4px;background:rgba(0,220,180,0.06);">
+                <img src="mujlogo.png" alt="MUJ" style="height:36px;width:36px;object-fit:contain;"
+                    onerror="this.src='https://via.placeholder.com/36?text=MUJ'">
             </div>
-            <div class="flex flex-col text-left">
-                <span class="text-xl font-black text-white leading-none uppercase tracking-tighter">PBL <span class="text-blue-500 italic">2026</span></span>
-                <span class="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Dept. of Computer Science & Engineering</span>
+            <div>
+                <div style="font-size:13px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">PBL <span
+                        class="teal-text">2026</span></div>
+                <div class="label" style="color:var(--muted);margin-top:2px;">Dept. of Computer Science & Engineering
+                </div>
             </div>
         </div>
-        <div class="hidden md:flex gap-8 text-[11px] uppercase tracking-widest font-bold opacity-70">
-            <a href="#problem" class="hover:text-blue-400 transition">Problem</a>
-            <a href="#methodology" class="hover:text-blue-400 transition">Methodology</a>
-            <a href="#results" class="hover:text-blue-400 transition">Results</a>
-            <a href="#team" class="hover:text-blue-400 transition">Team</a>
+        <div style="display:flex;gap:32px;">
+            <a href="#problem" class="nav-link">Problem</a>
+            <a href="#methodology" class="nav-link">Methodology</a>
+            <a href="#results" class="nav-link">Results</a>
+            <a href="#team" class="nav-link">Team</a>
         </div>
     </nav>
- 
-    <main class="max-w-6xl mx-auto px-6 pt-48 pb-32 space-y-32">
-        
-        <section class="text-center">
-            <div class="inline-block px-4 py-1 border border-slate-800 rounded-full text-slate-500 text-[10px] font-mono mb-6 uppercase tracking-widest">ID: 2427030626</div>
-            <h1 class="text-6xl md:text-7xl font-extrabold mb-8 uppercase leading-tight"><span class="gradient-text uppercase">Epilepsy Detection</span></h1>
-            <p class="text-slate-400 max-w-2xl mx-auto italic text-lg leading-relaxed border-l-2 border-blue-500/30 pl-6 text-left">
-                Automated detection of epileptic seizures through EEG signal analysis using Deep Learning and Convolutional Neural Networks.
-            </p>
-        </section>
- 
-        <section id="problem" class="grid md:grid-cols-2 gap-12 items-stretch">
-            <div class="glass p-10 rounded-[2.5rem] flex flex-col justify-center border-l-4 border-blue-600">
-                <h2 class="text-3xl font-extrabold mb-6">Problem Statement</h2>
-                <p class="text-slate-400 leading-relaxed text-justify">The manual examination of Electroencephalogram (EEG) for epilepsy is a time-consuming and tedious process requiring highly skilled professionals, leading to potential diagnostic delays and observer variability. Current methods either lack sufficient accuracy, generalization, or are not real-time applicable. There is a critical need for an accurate, efficient, and reliable automated system which can detect epileptic seizures in real-time, while maintaining high sensitivity and specificity to reduce false negatives and false alarms, thereby enabling medical professionals to intervene on time to improve patient outcomes.</p>
+
+    <main class="content">
+
+        <section style="padding-top:160px;padding-bottom:40px;">
+            <div class="label" style="margin-bottom:24px;display:flex;align-items:center;gap:10px;">
+                <span class="pulse-dot"></span>
+                <span>ID: 2427030626 &nbsp;·&nbsp; LIVE EEG ANALYSIS SYSTEM</span>
             </div>
-            <div class="space-y-6">
-                <div class="glass p-7 rounded-3xl border-r-4 border-blue-500/50">
-                    <h3 class="text-blue-400 font-bold text-xs uppercase tracking-widest mb-2">Literature Review</h3>
-                    <p class="text-sm text-slate-500 italic">Analyzed 10 state-of-the-art models including Multiscale CNN (Truong et al., 98.1%), LSTM Networks (Hussein et al., 97.5%), EEGNet (Lawhern et al., 89.4%), Ensemble Deep Learning (Wei et al., 99.1%), Transfer Learning approaches, Attention-based CNNs, and Graph CNNs. Datasets: CHB-MIT (664 hours, 24 patients), Bonn University EEG, TUH EEG.</p>
-                </div>
-                <div class="glass p-7 rounded-3xl border-r-4 border-purple-500/50">
-                    <h3 class="text-purple-400 font-bold text-xs uppercase tracking-widest mb-2">Research Gap</h3>
-                    <p class="text-sm text-slate-500 italic">Unlike traditional ML approaches requiring manual feature engineering, our CNN-based solution automatically extracts both spatial (electrode relationships) and temporal (brain activity patterns) features from raw EEG data. Multi-class classification into 3 states (Inter-icatal,Ictal,Post-ictal) enables comprehensive seizure monitoring across the entire seizure cycle, not just detection during seizures.</p>
-                </div>
-            </div>
-        </section>
- 
-        <section id="methodology" class="space-y-12">
-            <h2 class="text-4xl font-black text-center uppercase tracking-tight">System <span class="text-blue-500">Methodology</span></h2>
-            <div class="grid md:grid-cols-3 gap-8">
-                <div class="glass p-8 rounded-3xl text-center">
-                    <i class="fas fa-database text-blue-500 text-3xl mb-4"></i>
-                    <h3 class="font-bold mb-2 uppercase text-xs tracking-widest">Data Pipeline</h3>
-                    <p class="text-sm text-slate-500"><strong>CHB-MIT:</strong> 664 hours, 24 patients, 23 channels @ 256 Hz | <strong>Bonn:</strong> 5 sets (Z,O,N,F,S), 100 segments each | <strong>Preprocessing:</strong>5-second windows with 1 second stride</p>
-                </div>
-                <div class="glass p-8 rounded-3xl text-center">
-                    <i class="fas fa-microchip text-purple-500 text-3xl mb-4"></i>
-                    <h3 class="font-bold mb-2 uppercase text-xs tracking-widest">Architecture</h3>
-                    <p class="text-sm text-slate-500">
-                        <strong>1D CNN:</strong>
-                        Conv1D Blocks: 8 filters (k=6) → 8 filters (k=5) → 16 filters (k=4) → 16 filters (k=4) → 32 filters (k=4) |
-                        Each block: Conv1D → ReLU → MaxPool |
-                        GlobalAveragePooling1D |
-                        FC Layers: 50 → 20 neurons |
-                        Output: 3-class SoftMax
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;">
+                <div>
+                    <h1
+                        style="font-size:clamp(2.8rem,5vw,4.6rem);font-weight:900;line-height:1.0;letter-spacing:-0.03em;margin-bottom:28px;font-family:'Syne',sans-serif;">
+                        EPILEPSY<br><span class="teal-text">DETECTION</span><br>
+                        <span
+                            style="font-family:'Space Mono',monospace;font-size:0.33em;color:var(--muted);font-weight:400;letter-spacing:0.12em;">via
+                            1D CNN · EEG SIGNALS</span>
+                    </h1>
+                    <p style="color:var(--muted);line-height:1.9;font-size:15px;max-width:480px;font-family:'Inter',sans-serif;">
+                        Automated detection of epileptic seizures through EEG signal analysis using Deep Learning and
+                        Convolutional Neural Networks.
                     </p>
                 </div>
-                <div class="glass p-8 rounded-3xl text-center border-2 border-green-500/20 bg-green-500/5">
-                    <i class="fab fa-python text-green-500 text-3xl mb-4"></i>
-                    <h3 class="font-bold mb-4 uppercase text-xs tracking-widest text-green-400">Source Code</h3>
-                    <a href="https://github.com/Priyal-2905/EEG-Epilepsy-Detection.git" target="_blank" class="px-6 py-2 bg-green-600 rounded-full text-[10px] font-black hover:bg-green-500 transition shadow-lg shadow-green-900/40">VIEW CODE</a>
-                </div>
-            </div>
-        </section>
- 
-        <section id="results" class="glass p-12 rounded-[3.5rem] border-t-4 border-blue-500">
-            <h2 class="text-3xl font-black mb-12 text-center uppercase tracking-tight">Results & <span class="text-blue-500">Analysis</span></h2>
-            <div class="grid md:grid-cols-2 gap-16 items-center">
-                <div class="h-80"><canvas id="resultsChart"></canvas></div>
-                <div class="space-y-6">
-                    <div class="p-6 rounded-2xl bg-white/5 flex justify-between items-center border border-white/10 shadow-inner">
-                        <span class="text-slate-400 font-bold uppercase text-xs tracking-widest">Test Accuracy</span>
-                        <span class="text-blue-400 font-mono font-black text-3xl">95.53%</span>
+
+                <div class="panel" style="padding:20px 24px;">
+                    <div class="label" style="margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+                        <span class="pulse-dot" style="width:6px;height:6px;"></span> 23-CHANNEL EEG FEED
                     </div>
-                    <div class="p-6 rounded-2xl bg-white/5 flex justify-between items-center border border-white/10 shadow-inner">
-                        <span class="text-slate-400 font-bold uppercase text-xs tracking-widest">Sensitivity</span>
-                        <span class="text-green-400 font-mono font-black text-3xl">97.13%</span>
+                    <div id="channelDisplay"></div>
+                    <div class="accent-line" style="margin-top:16px;"></div>
+                    <div style="display:flex;justify-content:space-between;margin-top:10px;">
+                        <span class="label" style="color:var(--muted);">256 Hz</span>
+                        <span class="label" style="color:var(--muted);">CHB-MIT</span>
+                        <span class="label" style="color:var(--muted);">24 patients</span>
                     </div>
-                    <div class="p-6 rounded-2xl bg-white/5 flex justify-between items-center border border-white/10 shadow-inner">
-                        <span class="text-slate-400 font-bold uppercase text-xs tracking-widest">Specificity </span>
-                        <span class="text-green-400 font-mono font-black text-3xl">95.47%</span>
-                    </div>
-                    <p class="text-slate-500 text-sm italic text-justify leading-relaxed">CNN model achieved  95.1% accuracy on the CHB-MIT dataset,comparable to the best existing models. The model successfully classifies EEG signals into 3 states: Inter-ictal, Ictal, and Post-ictal, enabling comprehensive seizure monitoring and early intervention.</p>
                 </div>
             </div>
         </section>
 
-        <section id="techstack" class="glass p-12 rounded-[3.5rem] border-2 border-purple-500/30">
-            <h2 class="text-4xl font-black text-center uppercase tracking-tight mb-12">Technology <span class="text-purple-500">Stack</span></h2>
-            <div class="grid md:grid-cols-3 gap-8">
-                <div class="text-center">
-                    <div class="w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                        <i class="fab fa-python text-blue-400 text-6xl"></i>
+        <div class="wave-divider"><canvas class="divider-wave" data-freq="0.8" data-amp="18" data-speed="0.6"></canvas>
+        </div>
+
+        <section id="problem">
+            <div class="label" style="margin-bottom:20px;">// 01 · Problem Statement</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+                <div class="panel card" style="border-left:2px solid var(--teal);">
+                    <h2 style="font-size:1.7rem;font-weight:800;margin-bottom:18px;font-family:'Syne',sans-serif;">The Problem</h2>
+                    <p style="color:var(--muted);line-height:1.9;font-size:14.5px;text-align:justify;font-family:'Inter',sans-serif;">
+                        The manual examination of EEG for epilepsy is a time-consuming and tedious process requiring
+                        highly skilled professionals, leading to diagnostic delays and observer variability. Current
+                        methods either lack sufficient accuracy, generalization, or are not real-time applicable. There
+                        is a critical need for an accurate, efficient automated system which can detect epileptic
+                        seizures in real-time, while maintaining high sensitivity and specificity to reduce false
+                        negatives and false alarms, enabling timely medical intervention.
+                    </p>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:20px;">
+                    <div class="panel card" style="border-right:2px solid rgba(44, 174, 150, 0.4);">
+                        <div class="label" style="margin-bottom:10px;">Literature Review</div>
+                        <p style="font-size:13.5px;color:var(--muted);line-height:1.85;font-family:'Inter',sans-serif;">
+                            Analyzed 10 SOTA models: Multiscale CNN , LSTM , EEGNet
+                            , Ensemble , Transfer Learning, Attention CNNs, Graph CNNs.
+                            Datasets: CHB-MIT (664h, 24 patients), Bonn EEG, TUH EEG.
+                        </p>
                     </div>
-                    <h3 class="font-black text-xl mb-2">Python 3.11</h3>
-                    <p class="text-slate-500 text-sm">Core Language</p>
-                </div>
-                <div class="text-center">
-                    <div class="w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                        <i class="fas fa-brain text-purple-400 text-6xl"></i>
+                    <div class="panel card" style="border-right:2px solid rgba(245,158,11,0.4);">
+                        <div class="label" style="color:var(--amber);margin-bottom:10px;">Research Gap</div>
+                        <p style="font-size:13.5px;color:var(--muted);line-height:1.85;font-family:'Inter',sans-serif;">
+                            Our CNN auto-extracts spatial & temporal features from raw EEG. Multi-class classification
+                            into 3 states — Inter-ictal, Ictal, Post-ictal — enables comprehensive monitoring across the
+                            full seizure cycle.
+                        </p>
                     </div>
-                    <h3 class="font-black text-xl mb-2">TensorFlow/Keras</h3>
-                    <p class="text-slate-500 text-sm">Deep Learning Framework</p>
-                </div>
-                <div class="text-center">
-                    <div class="w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                        <i class="fas fa-database text-orange-400 text-6xl"></i>
-                    </div>
-                    <h3 class="font-black text-xl mb-2">Pandas/NumPy</h3>
-                    <p class="text-slate-500 text-sm">Data Processing</p>
-                </div>
-            </div>
-            <div class="mt-10 text-center">
-                <p class="text-slate-600 text-sm">
-                    <span class="font-bold text-slate-500">Additional Tools:</span> 
-                    <span class="text-slate-600">Matplotlib • Seaborn</span>
-                </p>
-            </div>
-        </section>
- 
-        <section id="team" class="text-center pt-10 border-t border-slate-900">
-            <h2 class="text-[10px] font-black text-slate-600 uppercase tracking-[0.5em] mb-12">Academic Credits</h2>
-            <div class="flex flex-wrap justify-center gap-10">
-                <div class="glass px-12 py-8 rounded-[2rem] border-b-4 border-blue-600">
-                    <p class="text-[9px] font-bold text-blue-500 mb-2 uppercase tracking-widest">Project Guide</p>
-                    <p class="font-black text-xl text-slate-100">Dr. Neetu Gupta</p>
-                </div>
-                <div class="glass px-12 py-8 rounded-[2rem] border-b-4 border-slate-700">
-                    <p class="text-[9px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Team Member</p>
-                    <p class="font-black text-xl text-slate-100">Priyal Khandal</p>
-                    <p class="text-[10px] text-slate-500 mt-1">2427030626</p>
                 </div>
             </div>
         </section>
+
+        <div class="wave-divider"><canvas class="divider-wave" data-freq="1.2" data-amp="14" data-speed="0.9"
+                data-color="rgba(245,158,11,0.5)"></canvas></div>
+
+        <section id="methodology">
+            <div class="label" style="margin-bottom:20px;">// 02 · System Methodology</div>
+            <h2 style="font-size:2rem;font-weight:800;margin-bottom:32px;">System <span
+                    class="teal-text">Architecture</span></h2>
+
+            <div class="panel" style="padding:28px 32px;margin-bottom:24px;overflow-x:auto;">
+                <div class="label" style="margin-bottom:20px;">Model Pipeline</div>
+                <div style="display:flex;align-items:flex-start;gap:24px;min-width:900px;">
+                    <div class="arch-step">
+                        <div class="arch-box">EEG Input<br>23ch · 256Hz</div>
+                        <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;">Raw signal</div>
+                    </div>
+                    <div class="arch-step">
+                        <div class="arch-box">5-sec window<br>1-sec stride</div>
+                        <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;">Segmentation</div>
+                    </div>
+                    <div class="arch-step">
+                        <div class="arch-box">Conv1D(8,k8)<br>BN · MaxPool</div>
+                        <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;">Block 1</div>
+                    </div>
+                    <div class="arch-step">
+                        <div class="arch-box">Conv1D(16,k6)<br>BN · MaxPool</div>
+                        <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;">Block 2</div>
+                    </div>
+                    <div class="arch-step">
+                        <div class="arch-box">Conv1D(16,k6)<br>BN · MaxPool</div>
+                        <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;">Block 3</div>
+                    </div>
+                    <div class="arch-step">
+                        <div class="arch-box">Conv1D(32,k4)<br>BN · MaxPool</div>
+                        <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;">Block 4</div>
+                    </div>
+                    <div class="arch-step">
+                        <div class="arch-box">Conv1D(64,k4)<br>BN · GAP</div>
+                        <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;">Block 5</div>
+                    </div>
+                    <div class="arch-step">
+                        <div class="arch-box">Dense(50)→Dense(20)<br>Softmax(3)</div>
+                        <div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;">Classifier</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;">
+                <div class="panel card">
+                    <i class="fas fa-database teal-text" style="font-size:1.8rem;margin-bottom:12px;display:block;"></i>
+                    <div class="label" style="margin-bottom:8px;">Data Pipeline</div>
+                    <p style="font-size:13.5px;color:var(--muted);line-height:1.85;font-family:'Inter',sans-serif;">
+                        <strong style="color:var(--white);">CHB-MIT:</strong> 664 hours · 24 patients · 23 channels @
+                        256 Hz<br><br>
+                        <strong style="color:var(--white);">Bonn:</strong> 5 sets (Z,O,N,F,S) · 100 segments each
+                    </p>
+                </div>
+                <div class="panel card">
+                    <i class="fas fa-microchip"
+                        style="color:var(--amber);font-size:1.8rem;margin-bottom:12px;display:block;"></i>
+                    <div class="label" style="margin-bottom:8px;">Each Conv Block</div>
+                    <p style="font-size:13px;color:var(--muted);line-height:1.85;font-family:'Space Mono',monospace;">
+                        Conv1D<br>→ ReLU<br>→ BatchNorm<br>→ MaxPool1D
+                    </p>
+                </div>
+                <div class="panel card" style="border:1px solid rgba(0,220,180,0.25);">
+                    <i class="fab fa-github teal-text" style="font-size:1.8rem;margin-bottom:12px;display:block;"></i>
+                    <div class="label" style="margin-bottom:12px;">Source Code</div>
+                    <a href="https://github.com/Priyal-2905/EEG-Epilepsy-Detection.git" target="_blank" style="display:inline-block;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;
+                          padding:8px 18px;border:1px solid var(--teal);color:var(--teal);text-decoration:none;
+                          border-radius:4px;transition:all 0.2s;"
+                        onmouseover="this.style.background='rgba(0,220,180,0.1)'"
+                        onmouseout="this.style.background='transparent'">
+                        VIEW REPOSITORY →
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <div class="wave-divider"><canvas class="divider-wave" data-freq="0.6" data-amp="22" data-speed="0.4"></canvas>
+        </div>
+
+        <section id="results">
+            <div class="label" style="margin-bottom:20px;">// 03 · Results & Analysis</div>
+            <h2 style="font-size:2rem;font-weight:800;margin-bottom:32px;">Performance <span
+                    class="teal-text">Metrics</span></h2>
+
+            <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:start;">
+                <div class="panel" style="padding:28px;">
+                    <div class="label" style="margin-bottom:16px;">Performance Metrics Overview</div>
+                    <div style="height:300px;"><canvas id="resultsChart"></canvas></div>
+                    <div class="accent-line" style="margin-top:20px;"></div>
+                    <p
+                        style="font-size:12.5px;color:var(--muted);margin-top:14px;font-family:'Inter',sans-serif;line-height:1.8;">
+                        1D-CNN achieved 94.5% test accuracy on CHB-MIT. High specificity of 97.3% minimises false
+                        alarms, while 94.5% sensitivity ensures reliable seizure detection.
+                    </p>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div class="stat-block">
+                        <div class="stat-label-text" style="margin-bottom:6px;">Test Accuracy</div>
+                        <div class="stat-value">94.5<span style="font-size:1.1rem;color:var(--muted);">%</span></div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-label-text" style="margin-bottom:6px;">Sensitivity</div>
+                        <div class="stat-value">94.5<span style="font-size:1.1rem;color:var(--muted);">%</span></div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-label-text" style="margin-bottom:6px;">Specificity</div>
+                        <div class="stat-value">97.3<span style="font-size:1.1rem;color:var(--muted);">%</span></div>
+                    </div>
+
+                    <div class="panel" style="padding:20px;margin-top:8px;">
+                        <div class="label" style="margin-bottom:14px;">3-Class Output</div>
+                        <div style="display:flex;flex-direction:column;gap:12px;">
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <div
+                                    style="width:10px;height:10px;border-radius:50%;background:var(--teal);flex-shrink:0;box-shadow:0 0 8px rgba(0,229,200,0.6);">
+                                </div>
+                                <span style="font-family:'Inter',sans-serif;font-size:13px;color:var(--muted);">Inter-ictal &nbsp;·&nbsp;
+                                    Baseline state</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <div
+                                    style="width:10px;height:10px;border-radius:50%;background:var(--amber);flex-shrink:0;box-shadow:0 0 8px rgba(245,158,11,0.6);">
+                                </div>
+                                <span style="font-family:'Inter',sans-serif;font-size:13px;color:var(--muted);">Ictal &nbsp;·&nbsp; Active
+                                    seizure</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <div style="width:10px;height:10px;border-radius:50%;background:#a855f7;flex-shrink:0;box-shadow:0 0 8px rgba(168,85,247,0.6);">
+                                </div>
+                                <span style="font-family:'Inter',sans-serif;font-size:13px;color:var(--muted);">Post-ictal &nbsp;·&nbsp;
+                                    Recovery phase</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="wave-divider"><canvas class="divider-wave" data-freq="1.0" data-amp="16" data-speed="0.7"
+                data-color="rgba(168,85,247,0.5)"></canvas></div>
+
+        <!-- ── TECH STACK ── -->
+        <section id="techstack">
+            <div class="label" style="margin-bottom:20px;">// 04 · Technology Stack</div>
+            <h2 style="font-size:2rem;font-weight:800;margin-bottom:32px;">Built <span class="teal-text">With</span>
+            </h2>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+                <div class="panel card" style="text-align:center;">
+                    <i class="fab fa-python"
+                        style="font-size:2.5rem;color:#4a90d9;margin-bottom:12px;display:block;"></i>
+                    <div style="font-size:1rem;font-weight:700;margin-bottom:5px;font-family:'Syne',sans-serif;">Python 3.11</div>
+                    <div class="label" style="color:var(--muted);">Core Language</div>
+                </div>
+                <div class="panel card" style="text-align:center;">
+                    <i class="fas fa-brain"
+                        style="font-size:2.5rem;color:#f06292;margin-bottom:12px;display:block;"></i>
+                    <div style="font-size:1rem;font-weight:700;margin-bottom:5px;font-family:'Syne',sans-serif;">TensorFlow/Keras</div>
+                    <div class="label" style="color:var(--muted);">Deep Learning</div>
+                </div>
+                <div class="panel card" style="text-align:center;">
+                    <i class="fas fa-table"
+                        style="font-size:2.5rem;color:var(--amber);margin-bottom:12px;display:block;"></i>
+                    <div style="font-size:1rem;font-weight:700;margin-bottom:5px;font-family:'Syne',sans-serif;">Pandas / NumPy</div>
+                    <div class="label" style="color:var(--muted);">Data Processing</div>
+                </div>
+                <div class="panel card" style="text-align:center;">
+                    <i class="fas fa-chart-line"
+                        style="font-size:2.5rem;color:var(--teal);margin-bottom:12px;display:block;"></i>
+                    <div style="font-size:1rem;font-weight:700;margin-bottom:5px;font-family:'Syne',sans-serif;">Matplotlib</div>
+                    <div class="label" style="color:var(--muted);">Visualisation</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── TEAM ── -->
+        <section id="team" style="padding-bottom:40px;">
+            <div class="label" style="margin-bottom:20px;">// 05 · Academic Credits</div>
+            <div style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;">
+                <div class="team-card" style="border-top-color:var(--teal);">
+                    <div class="label" style="margin-bottom:12px;">Project Guide</div>
+                    <div style="font-size:1.35rem;font-weight:800;font-family:'Syne',sans-serif;">Dr. Neetu Gupta</div>
+                </div>
+                <div class="team-card" style="border-top-color:var(--muted);">
+                    <div class="label" style="margin-bottom:12px;">Team Member</div>
+                    <div style="font-size:1.35rem;font-weight:800;font-family:'Syne',sans-serif;">Priyal Khandal</div>
+                    <div class="mono" style="font-size:12px;color:var(--muted);margin-top:6px;">2427030626</div>
+                </div>
+            </div>
+        </section>
+
     </main>
- 
-    <footer class="py-12 text-center bg-black/40 border-t border-slate-900">
-        <p class="text-slate-600 text-[10px] font-bold tracking-[0.3em] uppercase mb-2">Manipal University Jaipur</p>
-        <p class="text-slate-500 text-[9px] font-medium tracking-[0.2em] uppercase opacity-50">Department of Computer Science & Engineering • 2026</p>
+
+    <footer class="content">
+        <div class="label" style="color:var(--muted);margin-bottom:6px;">Manipal University Jaipur</div>
+        <div class="label" style="color:var(--muted);opacity:0.5;">Department of Computer Science & Engineering · 2026
+        </div>
     </footer>
- 
+
     <script>
-     
-        let sec = 0;
-        let timer = null;
+        /* ══════════════════════════════════════════
+           EEG background — multiple scrolling traces
+        ═══════════════════════════════════════════ */
+        const bgCanvas = document.getElementById('eeg-bg');
+        const bgCtx = bgCanvas.getContext('2d');
+
+        function resizeBg() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+        }
+        resizeBg();
+        window.addEventListener('resize', resizeBg);
+
+        const BG_ROWS = 8;
+        let bgT = 0;
+
+        function eegWave(t, x, freq, amp, phase, chaos) {
+            let y = Math.sin(x * freq + t + phase) * amp;
+            y += Math.sin(x * freq * 2.3 + t * 1.7 + phase) * amp * 0.3;
+            y += Math.sin(x * freq * 0.4 + t * 0.5 + phase) * amp * 0.5;
+            // spike burst
+            const mod = (x * freq * 0.1 + t * 0.3 + phase) % (Math.PI * 2);
+            if (mod > 5.8) y += Math.sin(mod * 6) * amp * chaos;
+            return y;
+        }
+
+        function drawBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            const rowH = bgCanvas.height / BG_ROWS;
+            for (let r = 0; r < BG_ROWS; r++) {
+                const cy = rowH * r + rowH / 2;
+                const freq = 0.04 + r * 0.008;
+                const amp = 18 + r * 3;
+                const phase = r * 1.2;
+                const chaos = 1.5 + r * 0.3;
+                bgCtx.beginPath();
+                bgCtx.strokeStyle = `rgba(0,220,180,${0.4 + r * 0.04})`;
+                bgCtx.lineWidth = 1;
+                for (let x = 0; x <= bgCanvas.width; x += 2) {
+                    const y = cy + eegWave(bgT, x, freq, amp, phase, chaos);
+                    x === 0 ? bgCtx.moveTo(x, y) : bgCtx.lineTo(x, y);
+                }
+                bgCtx.stroke();
+            }
+            bgT += 0.025;
+            requestAnimationFrame(drawBg);
+        }
+        drawBg();
+
+        /* ══════════════════════════════════════════
+           Channel panel — mini EEG traces in hero
+        ═══════════════════════════════════════════ */
+        const CHANNELS = ['Fp1', 'Fp2', 'F3', 'F7', 'T3', 'T5', 'O1', 'C3', 'Pz'];
+        const channelDisplay = document.getElementById('channelDisplay');
+        const channelCanvases = [];
+
+        CHANNELS.forEach((ch, i) => {
+            const row = document.createElement('div');
+            row.className = 'channel-row';
+            row.innerHTML = `<span class="channel-label">${ch}</span>`;
+            const cv = document.createElement('canvas');
+            cv.className = 'channel-wave';
+            cv.height = 28;
+            row.appendChild(cv);
+            channelDisplay.appendChild(row);
+            channelCanvases.push({ cv, ctx: cv.getContext('2d'), phase: Math.random() * 10, freq: 0.04 + Math.random() * 0.03, amp: 6 + Math.random() * 5, chaos: Math.random() * 2 });
+        });
+
+        function resizeChannels() {
+            channelCanvases.forEach(({ cv }) => { cv.width = cv.offsetWidth || 200; });
+        }
+        resizeChannels();
+        window.addEventListener('resize', resizeChannels);
+
+        let chT = 0;
+        function drawChannels() {
+            channelCanvases.forEach(({ cv, ctx, phase, freq, amp, chaos }) => {
+                ctx.clearRect(0, 0, cv.width, cv.height);
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(0,220,180,0.8)';
+                ctx.lineWidth = 1;
+                const cy = cv.height / 2;
+                for (let x = 0; x <= cv.width; x += 1) {
+                    const y = cy + eegWave(chT, x, freq, amp, phase, chaos);
+                    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            });
+            chT += 0.04;
+            requestAnimationFrame(drawChannels);
+        }
+        drawChannels();
+
+        /* ══════════════════════════════════════════
+           Wave dividers
+        ═══════════════════════════════════════════ */
+        const dividers = document.querySelectorAll('.divider-wave');
+        const dividerStates = [];
+        dividers.forEach(cv => {
+            const container = cv.parentElement;
+            cv.width = container.offsetWidth;
+            cv.height = 60;
+            dividerStates.push({
+                cv,
+                ctx: cv.getContext('2d'),
+                t: Math.random() * 10,
+                freq: parseFloat(cv.dataset.freq || 0.8),
+                amp: parseFloat(cv.dataset.amp || 18),
+                speed: parseFloat(cv.dataset.speed || 0.6),
+                color: cv.dataset.color || 'rgba(0,220,180,0.6)'
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            dividers.forEach((cv) => { cv.width = cv.parentElement.offsetWidth; });
+        });
+
+        function drawDividers() {
+            dividerStates.forEach(s => {
+                const { cv, ctx, freq, amp, speed, color } = s;
+                ctx.clearRect(0, 0, cv.width, cv.height);
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1.5;
+                const cy = cv.height / 2;
+                for (let x = 0; x <= cv.width; x += 2) {
+                    const y = cy + eegWave(s.t, x, 0.015 * freq * 100 / cv.width * 30, amp, 0, 2);
+                    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                s.t += speed * 0.03;
+            });
+            requestAnimationFrame(drawDividers);
+        }
+        drawDividers();
+
+        /* ══════════════════════════════════════════
+           Timer
+        ═══════════════════════════════════════════ */
+        let sec = 0, timerInterval = null;
         function startTimer() {
-            timer = setInterval(() => {
+            timerInterval = setInterval(() => {
                 sec++;
-                let m = Math.floor(sec / 60);
-                let s = sec % 60;
-                document.getElementById('displayTime').innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                
-                if (sec >= 480 && sec < 600) { // 8-10 Mins Warning
-                    document.getElementById('timerContainer').classList.add('timer-warning');
-                    document.getElementById('timerIcon').classList.replace('fa-hourglass-start', 'fa-hourglass-half');
-                } else if (sec >= 600) { // 10 Mins Stop
-                    clearInterval(timer);
-                    document.getElementById('timerContainer').classList.replace('timer-warning', 'timer-stop');
-                    document.getElementById('displayTime').innerText = "10:00";
-                    document.getElementById('timerIcon').classList.replace('fa-hourglass-half', 'fa-hourglass-end');
+                const m = Math.floor(sec / 60), s = sec % 60;
+                document.getElementById('displayTime').innerText =
+                    `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+                const tc = document.getElementById('timerContainer');
+                if (sec >= 600) {
+                    clearInterval(timerInterval);
+                    tc.classList.add('timer-stop');
+                    document.getElementById('displayTime').innerText = '10:00';
+                } else if (sec >= 480) {
+                    tc.classList.add('timer-warning');
                 }
             }, 1000);
         }
- 
-        const ctx = document.getElementById('resultsChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: [ 'Deep CNN\n(Acharya)', 'LSTM\n(Hussein)', 'Our CNN\nModel','Ensemble\n(Wei)'],
-                datasets: [{
-                    label: 'Accuracy (%)',
-                    data: [ 87.51, 97.5, 95.1, 99.1],
-                    backgroundColor: ['#1e293b', '#334155', '#a855f7', '#3b82f6'],
-                    borderRadius: 10,
-                    barThickness: 40
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { 
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return 'Accuracy: ' + context.parsed.y + '%';
-                            }
-                        }
-                    }
+
+        /* ══════════════════════════════════════════
+           Bar chart
+        ═══════════════════════════════════════════ */
+        function buildChart() {
+            const ctx = document.getElementById('resultsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Test Accuracy', 'Sensitivity', 'Specificity'],
+                    datasets: [{
+                        label: 'Score (%)',
+                        data: [94.5, 94.5, 97.3],
+                        backgroundColor: [
+                            'rgba(0,220,180,0.25)',
+                            'rgba(168,85,247,0.25)',
+                            'rgba(245,158,11,0.25)'
+                        ],
+                        borderColor: [
+                            'rgba(0,220,180,1)',
+                            'rgba(168,85,247,1)',
+                            'rgba(245,158,11,1)'
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 4,
+                        barThickness: 64
+                    }]
                 },
-                scales: {
-                    y: { 
-                        beginAtZero: true, 
-                        max: 100,
-                        grid: { color: '#ffffff05' }, 
-                        ticks: { 
-                            color: '#94a3b8',
-                            callback: function(value) {
-                                return value + '%';
-                            }
-                        }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(3,10,15,0.95)',
+                            borderColor: 'rgba(0,220,180,0.3)',
+                            borderWidth: 1,
+                            titleFont: { family: 'Space Mono' },
+                            bodyFont: { family: 'Space Mono' },
+                            callbacks: { label: c => c.parsed.y + '%' }
+                        },
+                        datalabels: { display: false }
                     },
-                    x: { 
-                        grid: { display: false }, 
-                        ticks: { 
-                            color: '#94a3b8',
-                            font: { size: 9 }
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            min: 88,
+                            max: 100,
+                            grid: { color: 'rgba(0,220,180,0.05)' },
+                            ticks: {
+                                color: '#4a7a74',
+                                font: { family: 'Space Mono', size: 9 },
+                                callback: v => v + '%'
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#e8f4f2', font: { family: 'Space Mono', size: 10 } }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
+
+        function init() {
+            startTimer();
+            buildChart();
+        }
     </script>
 </body>
+
 </html>
